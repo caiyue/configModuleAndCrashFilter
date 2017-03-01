@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import division
 from json import *
-import sys, getopt, string, os, glob, hashlib, gc, zlib, base64
+import  getopt, string, os, glob, hashlib, gc, zlib, base64
 from  datetime import  datetime
 import xlrd, xlsxwriter
 import xlwt
@@ -9,6 +9,7 @@ from Crypto.Cipher import AES
 from binascii import b2a_hex, a2b_hex
 from  utils import ReportFormat,ReportType,getValueForKey,deviceNameMap,getNestedValueForKeys
 import ConfigParser
+
 
 import sys
 reload(sys)
