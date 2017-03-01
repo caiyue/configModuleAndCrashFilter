@@ -10,6 +10,10 @@ from binascii import b2a_hex, a2b_hex
 from  utils import ReportFormat,ReportType,getValueForKey,deviceNameMap,getNestedValueForKeys
 import ConfigParser
 
+import sys
+reload(sys)
+sys.setdefaultencoding('utf8')
+
 
 class Report(object):
     def __init__(self, reportType, reportFormat):
@@ -385,28 +389,68 @@ class OOMxlsWritter(object):
 # ==================================================================================================
 #                                    配置化模块
 # ==================================================================================================
-relativePathOfConfigFile = 'config/*.config'
+relativePathOfConfigFile = 'config/modules.config'
 class  ConfigModules(object):
     def __init__(self):
         super(ConfigModules,self).__init__()
         self.cf = ConfigParser.RawConfigParser()
-        self.config = {}
+        self.configPath  = None
+        self.sections = None
 
-    def loadConfigFile(self,path):
+    def loadConfigFile(self):
         cwd = os.getcwd()
-        configPath = os.path.join(cwd,relativePathOfConfigFile)
-        if os.path.exists(configPath):
-            self.parserConfigFile(configPath)
+        self.configPath = os.path.join(cwd,relativePathOfConfigFile)
+        if os.path.exists(self.configPath):
+           return self.parserConfigFile(self.configPath)
+        else:
+            self.setDefaultConfig()
+            self.loadConfigFile()
 
-    def parserConfigFile(self):
-        cf.read()
 
-        return
+    def parserConfigFile(self,configPath):
+        '''absolute path'''
+        try:
+            self.cf.read(configPath)
+        except Exception,e:
+            print e,configPath
+        finally:
+            pass
+        self.sections = self.cf.sections()
+        return self.sections
+
+    def getValueWithKeyInSection(self,sec,key):
+        return self.cf.get(sec,key)
+
+    def setValueWithKeyInSection(self,sec,key,value):
+        self.cf.set(sec,key,value)
 
     def setDefaultConfig(self):
-        pass
+        '''set default config'''
+        dir = os.path.dirname(self.configPath)
+        if not os.path.exists(dir):
+            os.mkdir(dir)
+        fp = open(self.configPath, 'w')
+        fp.truncate()
 
+        self.cf.add_section('Search_oom')
+        self.cf.set('Search_oom', 'title', unicode('搜索OOM','utf-8'))
+        self.cf.set('Search_oom', 'controllers', 'FinalSearchListViewController')
 
+        self.cf.add_section('Cart_oom')
+        self.cf.set('Cart_oom', 'title', unicode('购物车OOM', 'utf-8'))
+        self.cf.set('Cart_oom', 'controllers', 'SynCartViewController')
+
+        self.cf.add_section('WareInfo_oom')
+        self.cf.set('WareInfo_oom', 'title', unicode('商祥OOM', 'utf-8'))
+        self.cf.set('WareInfo_oom', 'controllers', 'WareInfoBViewController')
+
+        self.cf.add_section('Web_oom')
+        self.cf.set('Web_oom', 'title', unicode('Web页面', 'utf-8'))
+        self.cf.set('Web_oom', 'controllers', 'JDWebViewController')
+        self.cf.write(fp)
+# ==================================================================================================
+#                                    配置化模块 END
+# ==================================================================================================
 
 
 if __name__ == '__main__':
@@ -416,5 +460,9 @@ if __name__ == '__main__':
     OOMWriter.writeAllCrashListToXls(cp.updatePercentAndSort(tu))
     OOMWriter.writeUniqUUIDCrashListToXls(cp.updatePercentAndSortWithFilterRepeatUUID(tu))
     OOMWriter.save()
+
+    cm = ConfigModules()
+    print  cm.loadConfigFile()
+
 
 
