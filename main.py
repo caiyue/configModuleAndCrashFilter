@@ -74,45 +74,54 @@ def fileList():
     fl = glob.glob("*.txt")
     return fl
 
+class CrashParser(object):
+    def __init__(self):
+        super(CrashParser,self).__init__()
+        self.list = fileList()
+        self.reportList = []
 
-class CrashParser():
-    def getCrashReports(self,filePath):
-        reportList = []
-        try:
-            file = open(filePath)
-            for line in file:
-                infoList = line.split('<|>')
-                if len(infoList) < 18:
-                    continue
-                reportType = int(infoList[0])
-                reportFormat = ReportFormat.ZIP_BASE64
-                if reportType == ReportType.KS:
-                    reportFormat = ReportFormat.ZIP_AES_BASE64
+    def getCrashReports(self):
+        if len(self.list) > 0:
+            index = 0
+            while (index < len(self.list)):
+                filePath = self.list[index]
+                try:
+                    file = open(filePath)
+                    for line in file:
+                        infoList = line.split('<|>')
+                        if len(infoList) < 18:
+                            continue
+                        reportType = int(infoList[0])
+                        reportFormat = ReportFormat.ZIP_BASE64
+                        if reportType == ReportType.KS:
+                            reportFormat = ReportFormat.ZIP_AES_BASE64
 
-                report = Report(reportType, ReportFormat.ZIP_BASE64)
-                #orginal data
-                report.originalData = infoList
+                        report = Report(reportType, ReportFormat.ZIP_BASE64)
+                        #orginal data
+                        report.originalData = infoList
 
-                # pin、uuid、崩溃时间
-                report.pin = infoList[6]
-                report.uuid = infoList[7]
-                report.time = infoList[2]
-                # 系统版本
-                report.osVersion = infoList[12]
-                # 页面路径
-                report.pagePath = infoList[17]
-                # 设备型号
-                report.devcieType = getDeviceModeName(infoList[9])
-                # crash信息
-                report.encryptedCrashString = infoList[15]
-                #report list
-                reportList.append(report)
+                        # pin、uuid、崩溃时间
+                        report.pin = infoList[6]
+                        report.uuid = infoList[7]
+                        report.time = infoList[2]
+                        # 系统版本
+                        report.osVersion = infoList[12]
+                        # 页面路径
+                        report.pagePath = infoList[17]
+                        # 设备型号
+                        report.devcieType = infoList[9]
+                        # crash信息
+                        report.encryptedCrashString = infoList[15]
+                        #report list
+                        self.reportList.append(report)
 
-        except Exception, e:
-            print e,filePath
-        finally:
-            file.close()
-        return reportList
+                except Exception, e:
+                    print e,filePath
+                finally:
+                    file.close()
+                index += 1
+        return self.reportList
+
 
     def parseCrashString(self,report):
             crashDict = None
@@ -156,6 +165,14 @@ class CrashParser():
                     report.error = errorInfo
             return report
 
+    def getDecryptedReportList(self):
+        reportList = self.getCrashReports()
+        if reportList and len(reportList) > 0:
+            for report in reportList:
+                self.parseCrashString(report)
+        return reportList
+
+
     def isForeground(self,report):
         report.foreground = getNestedValueForKeys(report.decryptedCrashDict,['system','application_stats','application_in_foreground'])
         return report.foreground
@@ -170,6 +187,7 @@ class CrashParser():
                     return getValueForKey(pageList[-1],'c')
 
 
+
 # class OOMpercentModel(object):
 #     def __init__(self,controller):
 #         super(OOMpercentModel,self).__init__()
@@ -177,6 +195,10 @@ class CrashParser():
 #         self.foregroundCount = 0 #maybe repeat by uuid
 #         self.backgroundCount = 0 #maybe repeat by uuid
 #         self.percent = 0
+
+# ==================================================================================================
+#                                    根据页面数排序
+# ==================================================================================================
 
 class OOMFilterRepeatedUUIDModel(object):
     def __init__(self,controller):
@@ -190,63 +212,57 @@ class OOMFilterRepeatedUUIDModel(object):
         self.backgroundRepeatCount = 0
 
 
-class OOMCrashPage(object):
+class OOMCrashBasedOnPage(object):
     '''generate reports list based on crash files'''
-    def __init__(self):
-        super(OOMCrashPage,self).__init__()
+    def __init__(self,crashParser):
+        super(OOMCrashBasedOnPage,self).__init__()
         self.pageKVCount = {}
-        self.list = fileList()
         self.allCrashCount = 0  # 所有的crash
         self.parsedCrashCount = 0  # 正常解析的数量
         self.unparsedCrashCount = 0  # 字段缺失导致无法正常解析
+        self.parser = crashParser
 
 
     #去重原则  UUID，controller 相同，才会认为是重复数据
-    def getOOMCrashPageCount(self):
+    def getOOMCrashPageCount(self,reportList):
         '''{controlerName:pageCountModel}'''
-        index = 0
-        crashParser = CrashParser()
-        if len(self.list) > 0:
-            while(index < len(self.list)):
-                reportList =  crashParser.getCrashReports(self.list[index])
-                self.allCrashCount = len(reportList)
-                if reportList and len(reportList) > 0:
-                    for report in reportList:
-                        crashParser.parseCrashString(report)
-                        # print  report.uuid,report.pin,report.osVersion,report.pagePath
-                        if not report.error:
-                            vc = crashParser.getOOMCrashControllerPage(report)
-                            if vc:
-                                self.parsedCrashCount += 1
-                                if self.pageKVCount.has_key(vc):
-                                    OOMModel = self.pageKVCount[vc]
-                                    isForeground = crashParser.isForeground(report)
-                                    if isForeground:
-                                        OOMModel.foregroundCount += 1
-                                    else:
-                                        OOMModel.backgroundCount += 1
-                                    if  report.uuid in OOMModel.uniqUUIDList:
-                                        if isForeground:
-                                            OOMModel.foregroundRepeatCount += 1
-                                        else:
-                                            OOMModel.backgroundRepeatCount += 1
-                                    else:
-                                        OOMModel.uniqUUIDList.append(report.uuid)
-                                else:
-                                    OOMModel = OOMFilterRepeatedUUIDModel(vc)
-                                    if crashParser.isForeground(report):
-                                        OOMModel.foregroundCount += 1
-                                    else:
-                                        OOMModel.backgroundCount += 1
 
-                                    OOMModel.uniqUUIDList.append(report.uuid)
-                                    self.pageKVCount[vc] = OOMModel
+        if reportList and len(reportList) > 0:
+            self.allCrashCount = len(reportList)
+            for report in reportList:
+                # print  report.uuid,report.pin,report.osVersion,report.pagePath
+                if not report.error:
+                    vc = self.parser.getOOMCrashControllerPage(report)
+                    if vc:
+                        self.parsedCrashCount += 1
+                        print report.uuid,report.osVersion,vc
+                        if self.pageKVCount.has_key(vc):
+                            OOMModel = self.pageKVCount[vc]
+                            isForeground = self.parser.isForeground(report)
+                            if isForeground:
+                                OOMModel.foregroundCount += 1
                             else:
-                                self.unparsedCrashCount += 1
+                                OOMModel.backgroundCount += 1
+                            if  report.uuid in OOMModel.uniqUUIDList:
+                                if isForeground:
+                                    OOMModel.foregroundRepeatCount += 1
+                                else:
+                                    OOMModel.backgroundRepeatCount += 1
+                            else:
+                                OOMModel.uniqUUIDList.append(report.uuid)
                         else:
-                            self.unparsedCrashCount += 1
+                            OOMModel = OOMFilterRepeatedUUIDModel(vc)
+                            if self.parser.isForeground(report):
+                                OOMModel.foregroundCount += 1
+                            else:
+                                OOMModel.backgroundCount += 1
 
-                index += 1
+                            OOMModel.uniqUUIDList.append(report.uuid)
+                            self.pageKVCount[vc] = OOMModel
+                    else:
+                        self.unparsedCrashCount += 1
+                else:
+                    self.unparsedCrashCount += 1
 
         return (self.allCrashCount,self.parsedCrashCount,self.unparsedCrashCount, self.pageKVCount)
 
@@ -281,6 +297,192 @@ class OOMCrashPage(object):
         # sort it
         sortedList = sorted(pageKVCount.items(), key=lambda e: (e[1].percent), reverse=True)
         return (allCrashCount, parsedCrashCount, unparsedCrashCount, sortedList)
+
+
+
+
+# ==================================================================================================
+#                                    根据页面 设备 排序 PAGE+UUID 去重
+# ==================================================================================================
+
+#pageName:PageAndDeviceListModel{modelList,UUIDlist}
+class PageAndDeviceListModel(object):
+    def __init__(self):
+        super(PageAndDeviceListModel,self).__init__()
+        self.detailModelList = []
+        self.uuidList = []
+
+
+
+class OOMFilterWithPageAndDeviceDetailModel(object):
+    def __init__(self,controller,deviceType):
+        super(OOMFilterWithPageAndDeviceDetailModel,self).__init__()
+        self.controller = controller
+        self.deviceType = deviceType
+
+        self.isForeground = 0
+        self.uuid = None
+
+class PageAndDeviceWritterModel(object):
+    '''用于写入到文件的model'''
+    def __init__(self,name):
+        super(PageAndDeviceWritterModel,self).__init__()
+        self.deviceName = name
+        self.foregoundCount = 0
+        self.backgroundCount = 0
+
+
+
+class OOMCrashBasedOnPageAndDevice(object):
+    def __init__(self,crashParser):
+        super(OOMCrashBasedOnPageAndDevice,self).__init__()
+        self.pageKVCount = {}
+        self.allCrashCount = 0  # 所有的crash
+        self.parsedCrashCount = 0  # 正常解析的数量
+        self.unparsedCrashCount = 0  # 字段缺失导致无法正常解析
+        self.parser = crashParser
+
+
+    def getOOMCrashPageAndDeviceCountMaybeRepeat(self,reportList):
+        '''{controlerName:pageCountModel},未根据page + uuid 过滤'''
+
+        if reportList and len(reportList) > 0:
+            self.allCrashCount = len(reportList)
+            for report in reportList:
+                # print  report.uuid,report.pin,report.osVersion,report.pagePath
+                if not report.error:
+                    vc = self.parser.getOOMCrashControllerPage(report)
+                    if vc:
+                        self.parsedCrashCount += 1
+                        if self.pageKVCount.has_key(vc):
+                            listModel = self.pageKVCount[vc]
+                            detailModel = OOMFilterWithPageAndDeviceDetailModel(vc,report.devcieType)
+                            detailModel.uuid = report.uuid
+                            detailModel.isForeground = isForeground = self.parser.isForeground(report)
+                            listModel.detailModelList.append(detailModel)
+                        else:
+                            isForeground = self.parser.isForeground(report)
+                            listModel = PageAndDeviceListModel()
+                            detailModel = OOMFilterWithPageAndDeviceDetailModel(vc,report.devcieType)
+                            detailModel.uuid = report.uuid
+                            detailModel.isForeground = isForeground
+                            listModel.detailModelList.append(detailModel)
+                            self.pageKVCount[vc] = listModel
+                    else:
+                        self.unparsedCrashCount += 1
+                else:
+                    self.unparsedCrashCount += 1
+
+        return (self.allCrashCount,self.parsedCrashCount,self.unparsedCrashCount, self.pageKVCount)
+
+    # deviceNameMap = {"iPhone3,1": "iPhone4",
+    #                  "iPhone3,2": "iPhone4",
+    #                  "iPhone3,3": "iPhone4",
+    #                  "iPhone4,1": "iPhone4s",
+    #                  "iPhone5,1": "iPhone5",
+    #                  "iPhone5,2": "iPhone5",
+    #                  "iPhone5,3": "iPhone5c",
+    #                  "iPhone5,4": "iPhone5c",
+    #                  "iPhone6,1": "iPhone5s",
+    #                  "iPhone6,2": "iPhone5s",
+    #                  "iPhone7,1": "iPhone6 Plus",
+    #                  "iPhone7,2": "iPhone6",
+    #                  "iPhone8,1": "iPhone6s Plus",
+    #                  "iPhone8,2": "iPhone6s",
+    #                  "iPhone8,4": "iPhoneSE",
+    #                  "iPhone9,1": "iPhone7",
+    #                  "iPhone9,2": "iPhone7 Plus",
+    #                  "iPhone9,3": "iPhone7",
+    #                  "iPhone9,4": "iPhone7 Plus",
+    #                  }
+
+    def getWrittenData(self,pageList):
+        '''根据给定的pageList，按照device 分类'''
+
+        i4Model = PageAndDeviceWritterModel('iPhone4')
+        i4sModel = PageAndDeviceWritterModel('iPhone4s')
+        i5Model = PageAndDeviceWritterModel('iPhone5')
+        i5cModel = PageAndDeviceWritterModel('iPhone5c')
+        i5sModel = PageAndDeviceWritterModel('iPhone5s')
+        i6Model = PageAndDeviceWritterModel('iPhone6')
+        i6pModel = PageAndDeviceWritterModel('iPhone6p')
+        i6sModel = PageAndDeviceWritterModel('iPhone6s')
+        i6spModel = PageAndDeviceWritterModel('iPhone6sp')
+        i7Model = PageAndDeviceWritterModel('iPhone7')
+        i7pModel = PageAndDeviceWritterModel('iPhone7p')
+
+
+        allCount = 0
+        if pageList and len(pageList) > 0:
+            for  pageName in pageList:
+                listModel = self.pageKVCount[pageName]
+                allCount += len(listModel.detailModelList)
+                for model  in listModel.detailModelList:
+                    dataMode = None
+                    if model.deviceType == 'iPhone3,1' or model.deviceType == 'iPhone3,2' or model.deviceType == 'iPhone3,3':
+                        dataMode = i4Model
+                    elif model.deviceType == 'iPhone4,1':
+                        dataMode = i4sModel
+                    elif model.deviceType == 'iPhone5,1' or model.deviceType == 'iPhone5,2':
+                        dataMode = i5Model
+                    elif model.deviceType == 'iPhone5,3' or model.deviceType == 'iPhone5,4':
+                        dataMode = i5cModel
+                    elif model.deviceType == 'iPhone6,1' or model.deviceType == 'iPhone6,2':
+                        dataMode = i5sModel
+                    elif model.deviceType == 'iPhone7,1':
+                        dataMode = i6pModel
+                    elif model.deviceType == 'iPhone7,2':
+                        dataMode = i6Model
+                    elif model.deviceType == 'iPhone8,1':
+                        dataMode = i6spModel
+                    elif model.deviceType == 'iPhone8,2':
+                        dataMode = i6sModel
+                    elif model.deviceType == 'iPhone9,1' or model.deviceType == 'iPhone9,3':
+                        dataMode = i7Model
+                    elif model.deviceType == 'iPhone9,2' or model.deviceType == 'iPhone9,4':
+                        dataMode = i7pModel
+
+                    if model.isForeground:
+                        dataMode.foregoundCount += 1
+                    else:
+                        dataMode.backgroundCount += 1
+
+        return (allCount,i4Model,i4sModel,i5Model,i5cModel,i5sModel,i6Model,i6pModel,i6sModel,i6spModel,i7Model,i7pModel)
+
+
+
+    def getOOMCrashPageAndDeviceCountWithNoRepeat(self,reportList):
+        '''根据page + uuid 过滤'''
+
+        # if reportList and len(reportList) > 0:
+        #     self.allCrashCount = len(reportList)
+        #     for report in reportList:
+        #         # print  report.uuid,report.pin,report.osVersion,report.pagePath
+        #         if not report.error:
+        #             vc = self.parser.getOOMCrashControllerPage(report)
+        #             if vc:
+        #                 self.parsedCrashCount += 1
+        #                 if self.pageKVCount.has_key(vc):
+        #                     listModel = self.pageKVCount[vc]
+        #                     detailModel = OOMFilterWithPageAndDeviceDetailModel(vc,report.devcieType)
+        #                     detailModel.uuid = report.uuid
+        #                     detailModel.isForeground = isForeground = self.parser.isForeground(report)
+        #                     listModel.detailModelList.append(detailModel)
+        #                 else:
+        #                     isForeground = self.parser.isForeground(report)
+        #                     listModel = PageAndDeviceListModel()
+        #                     detailModel = OOMFilterWithPageAndDeviceDetailModel(vc,report.devcieType)
+        #                     detailModel.uuid = report.uuid
+        #                     detailModel.isForeground = isForeground
+        #                     listModel.detailModelList.append(detailModel)
+        #                     self.pageKVCount[vc] = detailModel
+        #             else:
+        #                 self.unparsedCrashCount += 1
+        #         else:
+        #             self.unparsedCrashCount += 1
+        #
+        # return (self.allCrashCount,self.parsedCrashCount,self.unparsedCrashCount, self.pageKVCount)
+
 
 
 class OOMxlsWritter(object):
@@ -381,6 +583,37 @@ class OOMxlsWritter(object):
                     sheet.write(row, 4, percent, style)
                     row = row + 1
 
+    def writeAllBasedOnPageAndDevice(self,tu,indexOfSection):
+        '''12 列元素，第一个列是总的数量，后面11项是每种设备的crash 数量，indexOfSection start from 0'''
+        if len(tu) != 12:
+            return
+        allCount = tu[0]
+
+        sheet = self.wbk.add_sheet(unicode('根据模块设备未去重', 'utf-8'), cell_overwrite_ok=True)
+        today = datetime.today()
+        today_date = datetime.date(today)
+
+        titleStyle = xlwt.easyxf("font:bold 1, color black; align: horiz right")
+        style = xlwt.easyxf("font:color black; align: horiz right")
+
+        dataIndex = 1
+        row = 1
+        coulum  =  indexOfSection * 4#each secton has 4 columns
+
+        while dataIndex < len(tu):
+            sheet.write(row,coulum,tu[dataIndex].deviceName)
+            sheet.write(row,coulum+1,tu[dataIndex].foregoundCount + tu[dataIndex].backgroundCount)
+            sheet.write(row,coulum+2,tu[dataIndex].foregoundCount)
+            sheet.write(row,coulum+3,tu[dataIndex].backgroundCount)
+
+            sheet.write(row + len(tu), coulum, tu[dataIndex].deviceName)
+            sheet.write(row + len(tu), coulum + 1, (tu[dataIndex].foregoundCount + tu[dataIndex].backgroundCount)/allCount)
+            sheet.write(row + len(tu), coulum + 2, tu[dataIndex].foregoundCount)
+            sheet.write(row + len(tu), coulum + 3, tu[dataIndex].backgroundCount)
+            row += 1
+            dataIndex += 1
+
+
 
     def save(self):
         today = datetime.today()
@@ -455,15 +688,30 @@ class  ConfigModules(object):
 
 
 if __name__ == '__main__':
-    cp = OOMCrashPage()
-    tu =  cp.getOOMCrashPageCount()
+
+    #获取所有的reportList
+    cp = CrashParser()
+    reportList = cp.getDecryptedReportList()
+
+    #根据ctonroller 计算比例，同一个页面，同一个uuid 才算是数据重复
+    pageCP = OOMCrashBasedOnPage(cp)
+    tu =  pageCP.getOOMCrashPageCount(reportList)
+
     OOMWriter = OOMxlsWritter()
-    OOMWriter.writeAllCrashListToXls(cp.updatePercentAndSort(tu))
-    OOMWriter.writeUniqUUIDCrashListToXls(cp.updatePercentAndSortWithFilterRepeatUUID(tu))
+    OOMWriter.writeAllCrashListToXls(pageCP.updatePercentAndSort(tu))
+    OOMWriter.writeUniqUUIDCrashListToXls(pageCP.updatePercentAndSortWithFilterRepeatUUID(tu))
+
+
+    #根据模块 device 拆分
+    pageAndDevie  = OOMCrashBasedOnPageAndDevice(cp)
+    pageAndDevie.getOOMCrashPageAndDeviceCountMaybeRepeat(reportList)
+    pdTu = pageAndDevie.getWrittenData(['FinalSearchListViewController'])
+    OOMWriter.writeAllBasedOnPageAndDevice(pdTu,0)#第一个section
+
+
+    # cm = ConfigModules()
+    # print  cm.loadConfigFile()
+
+
+
     OOMWriter.save()
-
-    cm = ConfigModules()
-    print  cm.loadConfigFile()
-
-
-
