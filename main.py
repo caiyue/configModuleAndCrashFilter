@@ -324,7 +324,7 @@ class OOMxlsWritter(object):
                         name = tp[0]
                         foregroundCount = tp[1].foregroundCount
                         backgroundCount = tp[1].backgroundCount
-                        percent = tp[1].percent
+                        percent = str('%.2f' % tp[1].percent) + '%'
                         sheet.write(row, 0, name)
                         sheet.write(row, 1,foregroundCount + backgroundCount,style)
                         sheet.write(row, 2, foregroundCount,style)
@@ -373,7 +373,7 @@ class OOMxlsWritter(object):
                     foregroundRepeatCount = tp[1].foregroundRepeatCount
                     backgroundRepeatCount = tp[1].backgroundRepeatCount
 
-                    percent = tp[1].percent
+                    percent = str('%.2f' % tp[1].percent) + '%'
                     sheet.write(row, 0, name)
                     sheet.write(row, 1, foregroundCount + backgroundCount - foregroundRepeatCount - backgroundRepeatCount , style)
                     sheet.write(row, 2, foregroundCount - foregroundRepeatCount, style)
