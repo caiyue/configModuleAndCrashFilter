@@ -583,11 +583,10 @@ class OOMxlsWritter(object):
                     sheet.write(row, 4, percent, style)
                     row = row + 1
 
-    def writeAllBasedOnPageAndDevice(self,tu,indexOfSection):
+
+
+    def writeAllBasedOnPageAndDeviceWithSecionts(self,sections,cf,pageAndDevie):
         '''12 列元素，第一个列是总的数量，后面11项是每种设备的crash 数量，indexOfSection start from 0'''
-        if len(tu) != 12:
-            return
-        allCount = tu[0]
 
         sheet = self.wbk.add_sheet(unicode('根据模块设备未去重', 'utf-8'), cell_overwrite_ok=True)
         today = datetime.today()
@@ -595,24 +594,70 @@ class OOMxlsWritter(object):
 
         titleStyle = xlwt.easyxf("font:bold 1, color black; align: horiz right")
         style = xlwt.easyxf("font:color black; align: horiz right")
+        boldStyle = xlwt.easyxf("font:bold 1, color black; align: horiz left")
 
-        dataIndex = 1
-        row = 1
-        coulum  =  indexOfSection * 4#each secton has 4 columns
+        for sec in sections:
+            indexOfSection = sections.index(sec)
+            title = cf.getValueWithKeyInSection(sec,'title')
+            controllers = cf.getValueWithKeyInSection(sec,'controllers')
 
-        while dataIndex < len(tu):
-            sheet.write(row,coulum,tu[dataIndex].deviceName)
-            sheet.write(row,coulum+1,tu[dataIndex].foregoundCount + tu[dataIndex].backgroundCount)
-            sheet.write(row,coulum+2,tu[dataIndex].foregoundCount)
-            sheet.write(row,coulum+3,tu[dataIndex].backgroundCount)
+            #拆分controllr
+            cArray = controllers.split(',')
+            if not cArray or len(cArray) == 0:
+                continue
 
-            sheet.write(row + len(tu), coulum, tu[dataIndex].deviceName)
-            sheet.write(row + len(tu), coulum + 1, (tu[dataIndex].foregoundCount + tu[dataIndex].backgroundCount)/allCount)
-            sheet.write(row + len(tu), coulum + 2, tu[dataIndex].foregoundCount)
-            sheet.write(row + len(tu), coulum + 3, tu[dataIndex].backgroundCount)
-            row += 1
-            dataIndex += 1
+            tu = pageAndDevie.getWrittenData(cArray)
+            if len(tu) != 12 or not sections or len(sections) == 0:
+                continue
 
+            allCount = tu[0]
+            dataIndex = 1
+            row = 1
+            coulum  =  indexOfSection * 4#each secton has 4 columns
+
+            #all count
+            foregroundCount = 0
+            backgroundCount = 0
+            while dataIndex < len(tu):
+                writeModel = tu[dataIndex]
+                foregroundCount += writeModel.foregoundCount
+                backgroundCount += writeModel.backgroundCount
+                dataIndex += 1
+
+            #title
+            sheet.write(0, coulum, unicode(title, 'utf-8'), boldStyle)
+            sheet.write(0, coulum + 1, unicode('前后台总量','utf-8'), style)
+            sheet.write(0, coulum + 2, unicode('前台', 'utf-8'), style)
+            sheet.write(0, coulum + 3, unicode('后台', 'utf-8'), style)
+
+
+            #先写统计
+            sheet.write(row + len(tu) - 1, coulum, unicode('总计', 'utf-8'),boldStyle)
+            sheet.write(row + len(tu) - 1, coulum + 1,backgroundCount + foregroundCount,style)
+
+            #写入数据
+            dataIndex  = 1
+            while dataIndex < len(tu):
+                sheet.write(row,coulum,tu[dataIndex].deviceName)
+                sheet.write(row,coulum+1,tu[dataIndex].foregoundCount + tu[dataIndex].backgroundCount,style)
+                sheet.write(row,coulum+2,tu[dataIndex].foregoundCount,style)
+                sheet.write(row,coulum+3,tu[dataIndex].backgroundCount,style)
+
+                sheet.write(row + len(tu), coulum, tu[dataIndex].deviceName)
+                if allCount == 0:
+                    sheet.write(row + len(tu), coulum + 1,'0.00%',style)
+                else:
+                    sheet.write(row + len(tu), coulum + 1, str('%.2f'% ((tu[dataIndex].foregoundCount + tu[dataIndex].backgroundCount)/allCount*100)) + '%',style)
+                if foregroundCount == 0:
+                    sheet.write(row + len(tu), coulum + 2,'0.00%',style)
+                else:
+                    sheet.write(row + len(tu), coulum + 2, str('%.2f' % ((tu[dataIndex].foregoundCount)/foregroundCount * 100)) + '%',style)
+                if backgroundCount == 0:
+                    sheet.write(row + len(tu), coulum + 3,'0.00%',style)
+                else:
+                    sheet.write(row + len(tu), coulum + 3, str('%.2f' % ((tu[dataIndex].backgroundCount)/backgroundCount * 100)) + '%',style)
+                row += 1
+                dataIndex += 1
 
 
     def save(self):
@@ -701,17 +746,12 @@ if __name__ == '__main__':
     OOMWriter.writeAllCrashListToXls(pageCP.updatePercentAndSort(tu))
     OOMWriter.writeUniqUUIDCrashListToXls(pageCP.updatePercentAndSortWithFilterRepeatUUID(tu))
 
-
     #根据模块 device 拆分
     pageAndDevie  = OOMCrashBasedOnPageAndDevice(cp)
     pageAndDevie.getOOMCrashPageAndDeviceCountMaybeRepeat(reportList)
-    pdTu = pageAndDevie.getWrittenData(['FinalSearchListViewController'])
-    OOMWriter.writeAllBasedOnPageAndDevice(pdTu,0)#第一个section
 
-
-    # cm = ConfigModules()
-    # print  cm.loadConfigFile()
-
-
+    cm = ConfigModules()
+    sections =  cm.loadConfigFile()
+    OOMWriter.writeAllBasedOnPageAndDeviceWithSecionts(sections,cm,pageAndDevie)#第一个section
 
     OOMWriter.save()
