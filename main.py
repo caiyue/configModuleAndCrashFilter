@@ -3,7 +3,6 @@ from __future__ import division
 from json import *
 import  getopt, string, os, glob, hashlib, gc, zlib, base64
 from  datetime import  datetime
-import xlrd, xlsxwriter
 import xlwt
 from Crypto.Cipher import AES
 from binascii import b2a_hex, a2b_hex
@@ -553,21 +552,20 @@ class OOMxlsWritter(object):
         sheet.write(0, 4, unicode('占比', 'utf-8'), style)
         row = 1
         for tp in slist:
-            if tp is not None:
-                if len(tp) > 0:
-                    name = tp[0]
-                    foregroundCount = tp[1].foregroundCount
-                    backgroundCount = tp[1].backgroundCount
-                    foregroundRepeatCount = tp[1].foregroundRepeatCount
-                    backgroundRepeatCount = tp[1].backgroundRepeatCount
+            if tp and len(tp) > 0:
+                name = tp[0]
+                foregroundCount = tp[1].foregroundCount
+                backgroundCount = tp[1].backgroundCount
+                foregroundRepeatCount = tp[1].foregroundRepeatCount
+                backgroundRepeatCount = tp[1].backgroundRepeatCount
 
-                    percent = str('%.2f' % tp[1].percent) + '%'
-                    sheet.write(row, 0, name)
-                    sheet.write(row, 1, foregroundCount + backgroundCount - foregroundRepeatCount - backgroundRepeatCount , style)
-                    sheet.write(row, 2, foregroundCount - foregroundRepeatCount, style)
-                    sheet.write(row, 3, backgroundCount - backgroundRepeatCount, style)
-                    sheet.write(row, 4, percent, style)
-                    row = row + 1
+                percent = str('%.2f' % tp[1].percent) + '%'
+                sheet.write(row, 0, name)
+                sheet.write(row, 1, foregroundCount + backgroundCount - foregroundRepeatCount - backgroundRepeatCount , style)
+                sheet.write(row, 2, foregroundCount - foregroundRepeatCount, style)
+                sheet.write(row, 3, backgroundCount - backgroundRepeatCount, style)
+                sheet.write(row, 4, percent, style)
+                row = row + 1
 
 
     def writeAllBasedOnPageAndDeviceWithSecionts(self,sections,cf,pageAndDevie,sheetName):
@@ -725,10 +723,17 @@ def  main():
     # config
     cm = ConfigModules()
     sections = cm.loadConfigFile()
+    if not sections or len(sections) == 0:
+        print 'configuration is error!!!'
+        return
 
     # 获取所有的reportList
     cp = CrashParser()
     reportList = cp.getDecryptedReportList()
+
+    if not reportList or len(reportList) == 0:
+        print 'No crash report!!!'
+        return
 
     # 根据ctonroller 计算比例，同一个页面，同一个uuid 才算是数据重复
     pageCP = OOMCrashBasedOnPage(cp)
