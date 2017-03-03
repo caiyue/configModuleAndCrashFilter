@@ -10,7 +10,6 @@ from binascii import b2a_hex, a2b_hex
 from  utils import ReportFormat,ReportType,getValueForKey,deviceNameMap,getNestedValueForKeys
 import ConfigParser
 
-
 import sys
 reload(sys)
 sys.setdefaultencoding('utf8')
@@ -412,7 +411,6 @@ class OOMCrashBasedOnPageAndDevice(object):
         return (self.allCrashCount, self.parsedCrashCount, self.unparsedCrashCount, self.pageKVCount)
 
 
-
     def getWrittenData(self,pageList):
         '''根据给定的pageList，按照device 分类'''
 
@@ -718,38 +716,37 @@ class  ConfigModules(object):
 #                                    配置化模块 END
 # ==================================================================================================
 
-
-if __name__ == '__main__':
-
-    #config
+def  main():
+    # config
     cm = ConfigModules()
     sections = cm.loadConfigFile()
 
-    #获取所有的reportList
+    # 获取所有的reportList
     cp = CrashParser()
     reportList = cp.getDecryptedReportList()
 
-    #根据ctonroller 计算比例，同一个页面，同一个uuid 才算是数据重复
+    # 根据ctonroller 计算比例，同一个页面，同一个uuid 才算是数据重复
     pageCP = OOMCrashBasedOnPage(cp)
-    tu =  pageCP.getOOMCrashPageCount(reportList)
+    tu = pageCP.getOOMCrashPageCount(reportList)
 
-    #根据页面 拆分
+    # 根据页面 拆分
     OOMWriter = OOMxlsWritter()
     OOMWriter.writeAllCrashListToXls(pageCP.updatePercentAndSort(tu))
     OOMWriter.writeUniqUUIDCrashListToXls(pageCP.updatePercentAndSortWithFilterRepeatUUID(tu))
 
-    #根据模块 device 拆分
-    pageAndDevie  = OOMCrashBasedOnPageAndDevice(cp)
+    # 根据模块 device 拆分
+    pageAndDevie = OOMCrashBasedOnPageAndDevice(cp)
     pageAndDevie.getOOMCrashPageAndDeviceCountMaybeRepeat(reportList)
-    OOMWriter.writeAllBasedOnPageAndDeviceWithSecionts(sections,cm,pageAndDevie,'根据设备未去重')
+    OOMWriter.writeAllBasedOnPageAndDeviceWithSecionts(sections, cm, pageAndDevie, '根据设备未去重')
 
     # #根据模块 device 拆分,去重
-    pageAndDevieFilterRepeat  = OOMCrashBasedOnPageAndDevice(cp)
+    pageAndDevieFilterRepeat = OOMCrashBasedOnPageAndDevice(cp)
     pageAndDevieFilterRepeat.getOOMCrashPageAndDeviceCountWithNoRepeat(reportList)
-    OOMWriter.writeAllBasedOnPageAndDeviceWithSecionts(sections,cm,pageAndDevieFilterRepeat,'根据设备已去重')
-    #
+    OOMWriter.writeAllBasedOnPageAndDeviceWithSecionts(sections, cm, pageAndDevieFilterRepeat, '根据设备已去重')
 
-    #根据
-
-
+    #保存数据
     OOMWriter.save()
+
+
+if __name__ == '__main__':
+    main()
