@@ -425,6 +425,7 @@ class OOMCrashBasedOnPageAndDevice(object):
         i6spModel = PageAndDeviceWritterModel('iPhone6sp')
         i7Model = PageAndDeviceWritterModel('iPhone7')
         i7pModel = PageAndDeviceWritterModel('iPhone7p')
+        otherDeviceModel = PageAndDeviceWritterModel('OtherDevice')
 
 
         allCount = 0
@@ -456,13 +457,17 @@ class OOMCrashBasedOnPageAndDevice(object):
                         dataMode = i7Model
                     elif model.deviceType == 'iPhone9,2' or model.deviceType == 'iPhone9,4':
                         dataMode = i7pModel
+                    else:
+                        # print  '发现异常设备', model.deviceType #may be iPod,iPhoneSE
+                        # continue
+                        dataMode = otherDeviceModel
 
                     if model.isForeground:
                         dataMode.foregoundCount += 1
                     else:
                         dataMode.backgroundCount += 1
 
-        return (allCount,i4Model,i4sModel,i5Model,i5cModel,i5sModel,i6Model,i6pModel,i6sModel,i6spModel,i7Model,i7pModel)
+        return (allCount,i4Model,i4sModel,i5Model,i5cModel,i5sModel,i6Model,i6pModel,i6sModel,i6spModel,i7Model,i7pModel,otherDeviceModel)
 
 
 
@@ -566,7 +571,7 @@ class OOMxlsWritter(object):
 
 
     def writeAllBasedOnPageAndDeviceWithSecionts(self,sections,cf,pageAndDevie,sheetName):
-        '''12 列元素，第一个列是总的数量，后面11项是每种设备的crash 数量，indexOfSection start from 0'''
+        '''13 列元素，第一个列是总的数量，后面12项是每种设备的crash 数量，indexOfSection start from 0'''
 
         sheet = self.wbk.add_sheet(unicode(sheetName, 'utf-8'), cell_overwrite_ok=True)
         today = datetime.today()
@@ -587,7 +592,7 @@ class OOMxlsWritter(object):
                 continue
 
             tu = pageAndDevie.getWrittenData(cArray)
-            if len(tu) != 12 or not sections or len(sections) == 0:
+            if len(tu) != 13 or not sections or len(sections) == 0:
                 continue
 
             allCount = tu[0]
